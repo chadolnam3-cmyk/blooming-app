@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const experiences = [
@@ -12,21 +13,58 @@ const experiences = [
 
 export default function JoinPage() {
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phoneMiddle, setPhoneMiddle] = useState("");
+  const [phoneLast, setPhoneLast] = useState("");
   const [selected, setSelected] = useState("");
   const [memo, setMemo] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const router = useRouter();
+
+  const isValid =
+    name.trim() !== "" &&
+    phoneMiddle.length === 4 &&
+    phoneLast.length === 4 &&
+    selected !== "";
+
+  const handleJoin = () => {
+    if (!isValid || isSubmitting) return;
+
+    setIsSubmitting(true);
+
+    const members = JSON.parse(
+      localStorage.getItem("members") || "[]"
+    );
+
+    const fullPhone = `010${phoneMiddle}${phoneLast}`;
+
+    const newMember = {
+      id: `BM${Date.now()}`,
+      name: name.trim(),
+      phone: phoneLast,
+      fullPhone,
+      experience: selected,
+      memo: memo.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    members.push(newMember);
+
+    localStorage.setItem("members", JSON.stringify(members));
+
+    alert("회원가입이 완료되었습니다 🌸");
+
+    router.push("/");
+  };
 
   return (
     <main className="min-h-screen bg-[#FAF9F6] px-5 py-8 text-[#3F3F3F]">
       <div className="mx-auto max-w-md">
-
         <Link href="/" className="text-sm font-medium text-[#7FAF8A]">
           ← 출석화면으로
         </Link>
 
         <section className="mt-6 rounded-[32px] bg-white p-7 shadow-sm">
-
-          {/* 로고 */}
           <div className="text-center">
             <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center">
               <div className="relative h-12 w-10">
@@ -39,24 +77,25 @@ export default function JoinPage() {
             <p className="text-5xl font-light tracking-wide text-[#7FAF8A]">
               Blooming
             </p>
+
             <p className="mt-2 text-xs tracking-[0.35em] text-[#D8A48F]">
               bloom every day
             </p>
           </div>
 
-          {/* 타이틀 */}
           <div className="mt-9 text-center">
             <h1 className="text-2xl font-light">
               처음 오신 것을 환영합니다 🌸
             </h1>
+
             <p className="mt-3 text-sm leading-relaxed text-[#777]">
               출석을 위해 간단한 정보를 입력해주세요.
             </p>
           </div>
 
-          {/* 닉네임 */}
           <div className="mt-8">
             <label className="text-sm text-[#555]">닉네임</label>
+
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -65,19 +104,38 @@ export default function JoinPage() {
             />
           </div>
 
-          {/* 전화번호 */}
           <div className="mt-5">
-            <label className="text-sm text-[#555]">전화번호 뒷자리</label>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="mt-2 w-full rounded-2xl border border-[#E8E1DA] bg-[#FAF9F6] px-4 py-4 outline-none focus:border-[#7FAF8A]"
-              maxLength={4}
-              placeholder="4자리 입력"
-            />
+            <label className="text-sm text-[#555]">전화번호</label>
+
+            <div className="mt-2 grid grid-cols-[86px_1fr_1fr] gap-2">
+              <div className="flex items-center justify-center rounded-2xl border border-[#E8E1DA] bg-[#F2EFEA] px-3 py-4 text-base">
+                010 -
+              </div>
+
+              <input
+                value={phoneMiddle}
+                onChange={(e) =>
+                  setPhoneMiddle(e.target.value.replace(/\D/g, ""))
+                }
+                className="min-w-0 rounded-2xl border border-[#E8E1DA] bg-[#FAF9F6] px-4 py-4 outline-none focus:border-[#7FAF8A]"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="1234"
+              />
+
+              <input
+                value={phoneLast}
+                onChange={(e) =>
+                  setPhoneLast(e.target.value.replace(/\D/g, ""))
+                }
+                className="min-w-0 rounded-2xl border border-[#E8E1DA] bg-[#FAF9F6] px-4 py-4 outline-none focus:border-[#7FAF8A]"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="5678"
+              />
+            </div>
           </div>
 
-          {/* 요가 경험 */}
           <div className="mt-6">
             <p className="text-sm text-[#555]">요가 경험</p>
 
@@ -94,7 +152,8 @@ export default function JoinPage() {
                   }`}
                 >
                   <div className="font-medium">{item.label}</div>
-                  <div className="mt-2 text-xs text-[#777]">
+
+                  <div className="mt-2 text-xs leading-relaxed text-[#777]">
                     {item.message}
                   </div>
                 </button>
@@ -102,46 +161,35 @@ export default function JoinPage() {
             </div>
           </div>
 
-          {/* 특이사항 */}
           <div className="mt-6">
             <label className="text-sm text-[#555]">특이사항</label>
+
             <textarea
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
               className="mt-2 h-32 w-full resize-none rounded-2xl border border-[#E8E1DA] bg-[#FAF9F6] px-4 py-4 outline-none focus:border-[#7FAF8A]"
-              placeholder="예) 허리디스크, 임신 24주, 어깨 통증"
+              placeholder="예) 허리디스크, 임신 24주, 어깨 통증, 손목이 약함"
             />
           </div>
 
-          {/* 가입 버튼 */}
           <button
-            onClick={() => {
-              const members = JSON.parse(
-                localStorage.getItem("members") || "[]"
-              );
-
-              const newMember = {
-                id: "BM" + Date.now(),
-                name,
-                phone,
-                experience: selected,
-                memo,
-              };
-
-              members.push(newMember);
-              localStorage.setItem("members", JSON.stringify(members));
-
-              alert("가입 완료 🌱");
-            }}
-            className="mt-7 w-full rounded-2xl bg-[#7FAF8A] py-4 text-lg font-medium text-white"
+            type="button"
+            onClick={handleJoin}
+            disabled={!isValid || isSubmitting}
+            className={`mt-7 w-full rounded-2xl py-4 text-lg font-medium transition active:scale-[0.98] ${
+              isValid && !isSubmitting
+                ? "bg-[#7FAF8A] text-white"
+                : "cursor-not-allowed bg-gray-300 text-gray-500"
+            }`}
           >
-            가입하기
+            {isSubmitting ? "가입 처리 중..." : "가입하기"}
           </button>
 
-          <p className="mt-4 text-center text-xs text-[#999]">
-            입력하신 정보는 수업 진행 및 출석 확인을 위해서만 사용됩니다.
+          <p className="mt-4 text-center text-xs leading-relaxed text-[#999]">
+            입력하신 정보는
+            <br />
+            수업 진행 및 출석 확인을 위해서만 사용됩니다.
           </p>
-
         </section>
       </div>
     </main>
