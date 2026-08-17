@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { registerMember } from "@/lib/googleSheet";
 
 const experiences = [
   { label: "🌱 처음이에요", message: "천천히 함께 시작해볼게요." },
@@ -27,36 +28,66 @@ export default function JoinPage() {
     phoneLast.length === 4 &&
     selected !== "";
 
-  const handleJoin = () => {
-    if (!isValid || isSubmitting) return;
+const handleJoin = async () => {
+  if (!isValid || isSubmitting) return;
 
-    setIsSubmitting(true);
+  setIsSubmitting(true);
 
-    const members = JSON.parse(
-      localStorage.getItem("members") || "[]"
-    );
-
+  try {
     const fullPhone = `010${phoneMiddle}${phoneLast}`;
 
-    const newMember = {
-      id: `BM${Date.now()}`,
+    const result = await registerMember({
       name: name.trim(),
       phone: phoneLast,
       fullPhone,
       experience: selected,
       memo: memo.trim(),
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    members.push(newMember);
+    if (result.alreadyExists) {
+      alert("이미 등록된 회원입니다 🌿");
+      router.push("/");
+      return;
+    }
 
-    localStorage.setItem("members", JSON.stringify(members));
+    const savedMembers = JSON.parse(
+      localStorage.getItem("members") || "[]"
+    );
+
+    const members = Array.isArray(savedMembers)
+      ? savedMembers
+      : [];
+
+    const alreadySavedLocally = members.some(
+      (member: any) =>
+        member.name === result.member.name &&
+        member.phone === result.member.phone
+    );
+
+    if (!alreadySavedLocally) {
+      members.push(result.member);
+
+      localStorage.setItem(
+        "members",
+        JSON.stringify(members)
+      );
+    }
 
     alert("회원가입이 완료되었습니다 🌸");
 
     router.push("/");
-  };
+  } catch (error) {
+    console.error(error);
 
+    alert(
+      error instanceof Error
+        ? error.message
+        : "회원가입 중 오류가 발생했습니다."
+    );
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   return (
     <main className="min-h-screen bg-[#FAF9F6] px-5 py-8 text-[#3F3F3F]">
       <div className="mx-auto max-w-md">

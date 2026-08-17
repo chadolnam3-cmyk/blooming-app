@@ -4,10 +4,15 @@ import Header from "@/components/Header";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
+import {
+  addAttendance,
+  checkMember,
+  getMainSettings,
+} from "@/lib/googleSheet";
 export default function Home() {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+const [name, setName] = useState("");
+const [phone, setPhone] = useState("");
+const [isChecking, setIsChecking] = useState(false);
 
   const [todayMessage, setTodayMessage] = useState(
     "몸은 천천히,\n변화는 자연스럽게."
@@ -24,110 +29,94 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    const savedMessage = localStorage.getItem("todayMessage");
-    const savedClassTitle = localStorage.getItem("classTitle");
-    const savedClassContent = localStorage.getItem("classContent");
+  const loadMainSettings = async () => {
+    try {
+      const settings = await getMainSettings();
 
-    if (savedMessage) {
-      setTodayMessage(savedMessage);
+      setTodayMessage(
+        settings.todayMessage ||
+          "몸은 천천히,\n변화는 자연스럽게."
+      );
+
+      setClassTitle(
+        settings.classTitle ||
+          "허리와 골반 이완"
+      );
+
+      setClassContent(
+        settings.classContent ||
+          "부드러운 호흡과 함께 골반과 허리를 천천히 풀어봅니다."
+      );
+    } catch (error) {
+      console.error(
+        "메인화면 설정 불러오기 실패:",
+        error
+      );
     }
+  };
 
-    if (savedClassTitle) {
-      setClassTitle(savedClassTitle);
-    }
-
-    if (savedClassContent) {
-      setClassContent(savedClassContent);
-    }
-  }, []);
-
+  loadMainSettings();
+}, []);
   const isValid =
     name.trim() !== "" &&
     phone.trim().length === 4;
 
-const handleCheck = () => {
-  if (!isValid) return;
+const handleCheck = async () => {
+  if (!isValid || isChecking) return;
 
-  let members: any[] = [];
-
-  try {
-    const savedMembers = JSON.parse(
-      localStorage.getItem("members") || "[]"
-    );
-
-    members = Array.isArray(savedMembers)
-      ? savedMembers
-      : [];
-  } catch {
-    members = [];
-  }
-
-  const normalizedName = name.trim();
-  const normalizedPhone = phone.trim();
-
-  const user = members.find(
-    (member: any) =>
-      member.name?.trim() === normalizedName &&
-      member.phone === normalizedPhone
-  );
-
-  if (!user) {
-    router.push("/join");
-    return;
-  }
-
-  let attendanceRecords: any[] = [];
+  setIsChecking(true);
 
   try {
-    const savedAttendance = JSON.parse(
-      localStorage.getItem("attendance") || "[]"
+    const normalizedName = name.trim();
+    const normalizedPhone = phone.trim();
+
+    // 구글시트에서 회원 확인
+    const memberResult = await checkMember(
+      normalizedName,
+      normalizedPhone
     );
 
-    attendanceRecords = Array.isArray(savedAttendance)
-      ? savedAttendance
-      : [];
-  } catch {
-    attendanceRecords = [];
-  }
-
-  const today = new Date().toLocaleDateString("ko-KR");
-
-  const alreadyAttended = attendanceRecords.some(
-    (record: any) => {
-      const sameMember =
-        record.memberId === user.id ||
-        (record.name === user.name &&
-          record.phone === user.phone);
-
-      const sameDay =
-        new Date(record.date).toLocaleDateString("ko-KR") ===
-        today;
-
-      return sameMember && sameDay;
+    // 회원이 없으면 회원가입 화면으로 이동
+    if (!memberResult.found || !memberResult.member) {
+      alert("등록된 회원을 찾을 수 없습니다 🌿");
+      router.push("/join");
+      return;
     }
-  );
 
-  if (alreadyAttended) {
-    alert("오늘 이미 출석하셨습니다 🌿");
-    setName("");
-    setPhone("");
-    return;
+    const member = memberResult.member;
+
+    // 구글시트에 출석 기록 저장
+    const attendanceResult = await addAttendance({
+      memberId: member.id || "",
+      name: member.name,
+      phone: member.phone,
+      classTitle,
+    });
+
+    // 오늘 이미 출석한 회원
+    if (attendanceResult.alreadyAttended) {
+      alert("오늘 이미 출석하셨습니다 🌿");
+      setName("");
+      setPhone("");
+      return;
+    }
+
+    if (!attendanceResult.attended) {
+      throw new Error("출석을 저장하지 못했습니다.");
+    }
+
+    router.push("/success");
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : "출석 처리 중 오류가 발생했습니다."
+    );
+  } finally {
+    setIsChecking(false);
   }
-
-  attendanceRecords.push({
-    memberId: user.id || "",
-    name: user.name,
-    phone: user.phone,
-    date: new Date().toISOString(),
-    classTitle,
-  });
-
-  localStorage.setItem(
-    "attendance",
-    JSON.stringify(attendanceRecords)
-  );
-
-  router.push("/success");
 };
 
   return (
@@ -187,16 +176,17 @@ const handleCheck = () => {
           />
 
           <button
-            onClick={handleCheck}
-            disabled={!isValid}
-            className={`mt-6 w-full rounded-2xl py-4 font-medium transition ${
-              isValid
-                ? "bg-[#7FAF8A] text-white"
-                : "cursor-not-allowed bg-gray-300 text-gray-500"
-            }`}
-          >
-            출석하기
-          </button>
+  type="button"
+  onClick={handleCheck}
+  disabled={!isValid || isChecking}
+  className={`mt-6 w-full rounded-2xl py-4 font-medium transition ${
+    isValid && !isChecking
+      ? "bg-[#7FAF8A] text-white active:scale-[0.98]"
+      : "cursor-not-allowed bg-gray-300 text-gray-500"
+  }`}
+>
+  {isChecking ? "출석 확인 중..." : "출석하기"}
+</button>
         </section>
 
         {/* 회원가입 + admin */}
